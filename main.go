@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"time"
@@ -65,19 +65,18 @@ func main() {
 			break
 		}
 	}
-	_ = Search(*protein, []int{posX, posY}, 1, 0)
+	e := Search(*protein, [2]int{posX, posY}, 2, 0)
+	fmt.Println(e)
 }
 
-func Search(protein Protein, pos []int, k int, partialEnergy int) int {
+func Search(protein Protein, pos [2]int, k int, partialEnergy int) int {
 	positions := GetAvailableMoves(protein.Table, pos)
-	for _, v := range protein.Table {
-		fmt.Println(v)
-	}
-	fmt.Println()
-	for i := range positions {
+	var results []int
+	for _, i := range positions {
+		var res int
 		posX := pos[0]
 		posY := pos[1]
-		pt := protein.Table
+		pt := append(protein.Table[:0:0], protein.Table...)
 		switch i {
 		case 0: //up
 			posX--
@@ -94,75 +93,103 @@ func Search(protein Protein, pos []int, k int, partialEnergy int) int {
 		}
 
 		pt[posX][posY] = protein.Chain[k]
-		e, min, avg := CalculateEnergy(pt, []int{posX, posY})
+		proteinCopy := protein
+		proteinCopy.Table = pt
+
+		e, min, avg := CalculateEnergy(pt, [2]int{posX, posY}, i)
+		fmt.Println(e, min, avg)
 		partialNextEnergy := partialEnergy + e
 		if k == len(protein.Table)-1 {
 			return partialNextEnergy
 		} else {
-			fmt.Println(protein.Chain[k] == 'h', protein.Chain[k], 'h')
 			if protein.Chain[k] == 'h' {
 				if partialNextEnergy <= min {
-					protein.Table[posX][posY] = protein.Chain[k]
-					return Search(protein, []int{posX, posY}, k+1, partialNextEnergy)
+					res = Search(proteinCopy, [2]int{posX, posY}, k+1, partialNextEnergy)
+					results = append(results, res)
 				}
-				if partialNextEnergy > avg {
+				if float64(partialNextEnergy) > avg {
 					if float64(partialNextEnergy) > p1 {
-						protein.Table[posX][posY] = protein.Chain[k]
-						return Search(protein, []int{posX, posY}, k+1, partialNextEnergy)
+						res = Search(proteinCopy, [2]int{posX, posY}, k+1, partialNextEnergy)
+						results = append(results, res)
 					}
 				}
-				if min <= partialNextEnergy && partialNextEnergy <= avg {
+				if min <= partialNextEnergy && float64(partialNextEnergy) <= avg {
 					if float64(partialNextEnergy) > p2 {
-						protein.Table[posX][posY] = protein.Chain[k]
-						return Search(protein, []int{posX, posY}, k+1, partialNextEnergy)
+						res = Search(proteinCopy, [2]int{posX, posY}, k+1, partialNextEnergy)
+						results = append(results, res)
 					}
 				}
 			} else {
-				protein.Table[posX][posY] = protein.Chain[k]
-				return Search(protein, []int{posX, posY}, k+1, partialNextEnergy)
+				res = Search(proteinCopy, [2]int{posX, posY}, k+1, partialNextEnergy)
+				results = append(results, res)
 			}
 		}
+		//return res
 	}
-	return 1
+	min := 0
+	for _, v := range results {
+		if v < min {
+			min = v
+		}
+	}
+	return min
 }
-func CalculateEnergy(proteinTable [][]byte, pos []int) (e int, min int, avg int) {
-	min = 1
-	if pos[0]-1 > 0 {
-		if proteinTable[pos[0]-1][pos[1]] != 0 && bytes.Equal([]byte{proteinTable[pos[0]-1][pos[1]], proteinTable[pos[0]][pos[1]]}, []byte("hh")) {
-			e += 1
-		} else {
-			min = 0
+func CalculateEnergy(proteinTable [][]byte, pos [2]int, from int) (e int, min int, avg float64) {
+	var moves [3]int
+	switch from {
+	case 0:
+		moves = [3]int{0, 1, 2}
+		break
+	case 1:
+		moves = [3]int{0, 1, 3}
+		break
+	case 2:
+		moves = [3]int{0, 2, 3}
+		break
+	case 3:
+		moves = [3]int{1, 2, 3}
+		break
+	}
+	check := func() []int {
+		var e []int
+		for _, move := range moves {
+			var next [2]int
+			switch move {
+			case 0:
+				next = [2]int{pos[0] - 1, pos[1]}
+				break
+			case 1:
+				next = [2]int{pos[0], pos[1] - 1}
+				break
+			case 3:
+				next = [2]int{pos[0] + 1, pos[1]}
+				break
+			case 2:
+				next = [2]int{pos[0], pos[1] + 1}
+				break
+			}
+			if next[0] >= 0 && next[0] < len(proteinTable) && next[1] >= 0 && next[1] < len(proteinTable) {
+				if proteinTable[next[0]][next[1]] == proteinTable[pos[0]][pos[1]] {
+					e = append(e, -1)
+				} else {
+					e = append(e, 0)
+				}
+			}
+		}
+		return e
+	}
+	energies := check()
+	for _, v := range energies {
+		e += v
+		if v < min {
+			min = v
 		}
 	}
-
-	if pos[0]+1 < len(proteinTable) {
-		if proteinTable[pos[0]+1][pos[1]] != 0 && bytes.Equal([]byte{proteinTable[pos[0]+1][pos[1]], proteinTable[pos[0]][pos[1]]}, []byte("hh")) {
-			e += 1
-		} else {
-			min = 0
-		}
-	}
-
-	if pos[1]-1 > 0 {
-		if proteinTable[pos[0]][pos[1]-1] != 0 && bytes.Equal([]byte{proteinTable[pos[0]][pos[1]-1], proteinTable[pos[0]][pos[1]]}, []byte("hh")) {
-			e += 1
-		} else {
-			min = 0
-		}
-	}
-
-	if pos[1]+1 < len(proteinTable) {
-		if proteinTable[pos[0]][pos[1]+1] != 0 && bytes.Equal([]byte{proteinTable[pos[0]][pos[1]+1], proteinTable[pos[0]][pos[1]]}, []byte("hh")) {
-			e += 1
-		} else {
-			min = 0
-		}
-	}
-	avg = e / 4.
+	avg = math.Abs(float64(e)) / float64(len(energies))
 	return
 }
 
-func GetAvailableMoves(proteinTable [][]byte, pos []int) (moves []int) {
+func GetAvailableMoves(proteinTable [][]byte, pos [2]int) (moves []int) {
 	for i := 0; i < 4; i++ {
 		switch i {
 		case 0: //up

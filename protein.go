@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -31,4 +32,12 @@ func New(chain string) (*Protein, error) {
 		Chain:  strings.ToLower(chain),
 		Result: 0,
 	}, nil
+}
+
+func (protein Protein) String() string {
+	stringer := ""
+	for _, proteinRow := range protein.Table {
+		stringer += fmt.Sprintf("%+v\n", proteinRow)
+	}
+	return stringer
 }
