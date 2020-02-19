@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math"
 	"math/rand"
 	"os"
 	"time"
@@ -65,75 +64,56 @@ func main() {
 			break
 		}
 	}
-	e := Search(*protein, [2]int{posX, posY}, 2, 0)
-	fmt.Println(e)
+	results := make(chan int)
+	go Search(results, protein.Table, protein.Chain, posX, posY, 2, 0)
+
+	fmt.Println(<-results)
 }
 
-func Search(protein Protein, pos [2]int, k int, partialEnergy int) int {
-	positions := GetAvailableMoves(protein.Table, pos)
-	var results []int
-	for _, i := range positions {
-		var res int
-		posX := pos[0]
-		posY := pos[1]
-		pt := append(protein.Table[:0:0], protein.Table...)
-		switch i {
+func Search(results chan int, matrix [][]byte, chain string, posX int, posY int, k int, e int) {
+	availableMoves := GetAvailableMoves(matrix, [2]int{posX, posY})
+
+	// duplicating a table
+	duplicate := make([][]byte, len(matrix))
+	for i := range matrix {
+		duplicate[i] = make([]byte, len(matrix[i]))
+		copy(duplicate[i], matrix[i])
+	}
+
+	for _, move := range availableMoves {
+		switch move {
 		case 0: //up
 			posX--
-			break
 		case 1: //left
 			posY--
-			break
 		case 2: //right
-			posX++
-			break
-		case 3: //down
 			posY++
-			break
+		case 3: //down
+			posX++
 		}
-
-		pt[posX][posY] = protein.Chain[k]
-		proteinCopy := protein
-		proteinCopy.Table = pt
-
-		e, min, avg := CalculateEnergy(pt, [2]int{posX, posY}, i)
-		fmt.Println(e, min, avg)
-		partialNextEnergy := partialEnergy + e
-		if k == len(protein.Table)-1 {
-			return partialNextEnergy
+		energy, min, avg := CalculateEnergy(duplicate, [2]int{posX, posY}, move)
+		duplicate[posX][posY] = chain[k]
+		if k == len(chain)-1 {
+			results <- e
+			return
 		} else {
-			if protein.Chain[k] == 'h' {
-				if partialNextEnergy <= min {
-					res = Search(proteinCopy, [2]int{posX, posY}, k+1, partialNextEnergy)
-					results = append(results, res)
+			if chain[k] == 'h' {
+				if energy < min {
+					go Search(results, duplicate, chain, posX, posY, k+1, energy)
 				}
-				if float64(partialNextEnergy) > avg {
-					if float64(partialNextEnergy) > p1 {
-						res = Search(proteinCopy, [2]int{posX, posY}, k+1, partialNextEnergy)
-						results = append(results, res)
-					}
+				if float64(energy) > avg {
+					go Search(results, duplicate, chain, posX, posY, k+1, energy)
 				}
-				if min <= partialNextEnergy && float64(partialNextEnergy) <= avg {
-					if float64(partialNextEnergy) > p2 {
-						res = Search(proteinCopy, [2]int{posX, posY}, k+1, partialNextEnergy)
-						results = append(results, res)
-					}
+				if energy >= min && float64(energy) <= avg {
+					go Search(results, duplicate, chain, posX, posY, k+1, energy)
 				}
 			} else {
-				res = Search(proteinCopy, [2]int{posX, posY}, k+1, partialNextEnergy)
-				results = append(results, res)
+				go Search(results, duplicate, chain, posX, posY, k+1, energy)
 			}
 		}
-		//return res
 	}
-	min := 0
-	for _, v := range results {
-		if v < min {
-			min = v
-		}
-	}
-	return min
 }
+
 func CalculateEnergy(proteinTable [][]byte, pos [2]int, from int) (e int, min int, avg float64) {
 	var moves [3]int
 	switch from {
@@ -185,7 +165,7 @@ func CalculateEnergy(proteinTable [][]byte, pos [2]int, from int) (e int, min in
 			min = v
 		}
 	}
-	avg = math.Abs(float64(e)) / float64(len(energies))
+	avg = float64(e) / float64(len(energies))
 	return
 }
 
