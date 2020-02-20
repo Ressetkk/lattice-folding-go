@@ -23,9 +23,9 @@ func New(chain string) (*Protein, error) {
 	if size%2 == 0 {
 		size++
 	}
-	arr := make([][]byte, size)
+	arr := make([][]byte, size, '-')
 	for i := range arr {
-		arr[i] = make([]byte, size)
+		arr[i] = make([]byte, size, '-')
 	}
 	return &Protein{
 		Table:  arr,
