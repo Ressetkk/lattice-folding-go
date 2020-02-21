@@ -36,13 +36,13 @@ func main() {
 	}
 	protein.Table[posX][posY] = []byte(*proteinChain)[1]
 	results := make(chan int)
-	go Search(results, protein.Table, protein.Chain, posX, posY, 2, 0, 0, 0)
-	for {
-	}
+	Search(results, protein.Table, protein.Chain, posX, posY, 2, 0, 0, 0)
+
 }
 
 func Search(results chan int, matrix [][]byte, chain string, posX, posY, k, e, min int, avg float64) {
-	availableMoves := GetAvailableMoves(matrix, [2]int{posX, posY})
+	availableMoves := GetAvailableMoves(matrix, posX, posY)
+
 	// duplicating a table
 	duplicate := make([][]byte, len(matrix))
 	for i := range matrix {
@@ -55,84 +55,19 @@ func Search(results chan int, matrix [][]byte, chain string, posX, posY, k, e, m
 	}
 }
 
-func CalculateEnergy(proteinTable [][]byte, pos [2]int, from int) (e int) {
-	var moves [3]int
-	switch from {
-	case 0:
-		moves = [3]int{0, 1, 2}
-		break
-	case 1:
-		moves = [3]int{0, 1, 3}
-		break
-	case 2:
-		moves = [3]int{0, 2, 3}
-		break
-	case 3:
-		moves = [3]int{1, 2, 3}
-		break
-	}
-	check := func() int {
-		e := 0
-		for _, move := range moves {
-			var next [2]int
-			switch move {
-			case 0:
-				next = [2]int{pos[0] - 1, pos[1]}
-				break
-			case 1:
-				next = [2]int{pos[0], pos[1] - 1}
-				break
-			case 3:
-				next = [2]int{pos[0] + 1, pos[1]}
-				break
-			case 2:
-				next = [2]int{pos[0], pos[1] + 1}
-				break
-			}
-			if next[0] >= 0 && next[0] < len(proteinTable) && next[1] >= 0 && next[1] < len(proteinTable) {
-				if proteinTable[next[0]][next[1]] == 'h' && proteinTable[pos[0]][pos[1]] == 'h' {
-					e--
-				}
-			}
-		}
-		return e
-	}
-	e = check()
+func CalculateEnergy(proteinTable [][]byte, posX, posY, from int) (e int) {
+
 	return
 }
 
-func GetAvailableMoves(proteinTable [][]byte, pos [2]int) (moves []int) {
+func GetAvailableMoves(proteinTable [][]byte, posX, posY int) (moves []int) {
 	for i := 0; i < 4; i++ {
-		switch i {
-		case 0: //up
-			if pos[0]-1 >= 0 {
-				if proteinTable[pos[0]-1][pos[1]] == 0 {
-					moves = append(moves, i)
-				}
-			}
-			break
-		case 1: //left
-			if pos[1]-1 >= 0 {
-				if proteinTable[pos[0]][pos[1]-1] == 0 {
-					moves = append(moves, i)
-				}
-			}
-			break
-		case 2: //right
-			if pos[1]+1 < len(proteinTable) {
-				if proteinTable[pos[0]][pos[1]+1] == 0 {
-					moves = append(moves, i)
-				}
-			}
-			break
-		case 3: //down
-			if pos[0]+1 < len(proteinTable) {
-				if proteinTable[pos[0]+1][pos[1]] == 0 {
-					moves = append(moves, i)
-				}
-			}
-			break
+		if x, y, err := Move(i, posX, posY, len(proteinTable)); err != nil {
+			continue
+		} else if proteinTable[x][y] != 0 {
+			continue
 		}
+		moves = append(moves, i)
 	}
 	return
 }
