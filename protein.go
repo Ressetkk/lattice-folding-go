@@ -23,9 +23,9 @@ func New(chain string) (*Protein, error) {
 	if size%2 == 0 {
 		size++
 	}
-	arr := make([][]byte, size, '-')
+	arr := make([][]byte, size)
 	for i := range arr {
-		arr[i] = make([]byte, size, '-')
+		arr[i] = make([]byte, size)
 	}
 	return &Protein{
 		Table:  arr,
@@ -37,7 +37,7 @@ func New(chain string) (*Protein, error) {
 func (protein Protein) String() string {
 	stringer := ""
 	for _, proteinRow := range protein.Table {
-		stringer += fmt.Sprintf("%+v\n", proteinRow)
+		stringer += fmt.Sprintf("%s\n", proteinRow)
 	}
 	return stringer
 }

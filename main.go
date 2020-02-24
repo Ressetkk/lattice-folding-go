@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -11,8 +12,8 @@ import (
 
 var (
 	proteinChain = flag.String("protein", "", "character stream over the alphabet of {h, p}")
-	p1           = 0.2
-	p2           = 0.3
+	p1           = 0.4
+	p2           = 0.2
 )
 
 func main() {
@@ -37,58 +38,81 @@ func main() {
 	}
 	protein.Table[posX][posY] = []byte(*proteinChain)[1]
 	results := make(chan int)
-	go Search(results, protein.Table, protein.Chain, posX, posY, 2, 0, 0, 0)
-	for runtime.NumGoroutine() > 0 {
+
+	ctx, _ := context.WithTimeout(context.Background(), time.Second*30)
+
+	r := 0
+	go Search(ctx, results, protein.Table, protein.Chain, posX, posY, 2, 0, 0)
+
+loop:
+	for runtime.NumGoroutine() > 1 {
 		select {
 		case res, ok := <-results:
 			if ok {
-				fmt.Println(res)
+				if res < r {
+					r = res
+				}
 			}
+		case <-ctx.Done():
+			fmt.Println("Timed out. Stopping calculation...")
+			break loop
 		default:
 			continue
 		}
 	}
+	fmt.Printf("Chain: %s\nEnergy: %v\n", *proteinChain, r)
 }
 
-func Search(results chan int, matrix [][]byte, chain string, posX, posY, k, e, min int, avg float64) {
+func Search(ctx context.Context, results chan int, matrix [][]byte, chain string, posX, posY, k, e, min int) {
 	availableMoves := GetAvailableMoves(matrix, posX, posY)
 
 	// duplicating a table
 	duplicate := Duplicate(matrix)
-
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
 	for _, move := range availableMoves {
-		// TODO new logic
 		x, y, err := Move(move, posX, posY, len(duplicate))
 		if err != nil {
 			continue
 		}
-		duplicate[x][y] = chain[k]
 		energy := CalculateEnergy(matrix, posX, posY, move, e)
 		avg := (float64(e + energy)) / float64(k)
 		if energy < min {
 			min = energy
 		}
 		if k >= len(chain)-1 {
-			//fmt.Println(energy)
+			duplicate[x][y] = chain[k]
 			results <- energy
+			return
 		} else if chain[k] == 'h' {
-			if energy < min {
-				go Search(results, duplicate, chain, x, y, k+1, energy, min, avg)
+			if energy <= min {
+				duplicate[x][y] = chain[k]
+				go Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
+				continue
 			}
 			if float64(energy) > avg {
 				r := rand.Float64()
 				if r > p1 {
-					go Search(results, duplicate, chain, x, y, k+1, energy, min, avg)
+					duplicate[x][y] = chain[k]
+					go Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
+					continue
 				}
 			}
 			if min <= energy && float64(energy) <= avg {
 				r := rand.Float64()
 				if r > p2 {
-					go Search(results, duplicate, chain, x, y, k+1, energy, min, avg)
+					duplicate[x][y] = chain[k]
+					go Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
+					continue
 				}
 			}
 		} else {
-			go Search(results, duplicate, chain, x, y, k+1, energy, min, avg)
+			duplicate[x][y] = chain[k]
+			go Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
+			continue
 		}
 	}
 }
