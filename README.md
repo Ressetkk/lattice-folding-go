@@ -1,14 +1,18 @@
-## Zad. 1
-Na wejściu znajduje się ciąg literowy nad alfabetem {h, p}, np.
+# Proteing folding in Go
+Requirements:
+* Go version 1.13+
+* A lot of RAM
 
-`hpphpphphpphp`
+To run an application, simply compile it and execute the binary.
+The script accepts one flag `-protein` that accepts words over language {h,p}.
+```shell script
+cd lattice-folding-go
+go build
+./lattice-folding-go -protein [hp/HP*]
+```
 
-a na wyjściu (konsoli) generowana jest liczba niedodatnia (wartość E)
-oraz rysunek zapisany w pliku w dowolnym formacie graficznym.
-Chodzi o problem 2D hp protein folding. Można sobie o nim poczytać
-np. tu: 
+The application will work for 30 seconds and after the time it will return the lowest energy.
 
-https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5172541/
+THe algorithm used is covered in https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5172541/
 
-Program ma działać przez 30 sekund i w tym czasie uzyskać jak najlepszy
-wynik dla zadanego ciągu, który może mieć długość kilkudziesięciu liter.
+**The application is far from perfect and might crash due to out of memory errors. It does not return the generated protein image (yet).
