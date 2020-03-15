@@ -13,8 +13,8 @@ import (
 
 var (
 	proteinChain = flag.String("protein", "", "character stream over the alphabet of {h, p}")
-	p1           = 0.6
-	p2           = 0.4
+	p1           = flag.Float64("-p1", 0.4, "first probability [Dafault 0.4]")
+	p2           = flag.Float64("-p2", 0.2, "second probability [Dafault 0.2]")
 	working      = make(chan bool, 1000)
 )
 
@@ -96,7 +96,7 @@ func Search(ctx context.Context, results chan *Protein, matrix [][]byte, chain s
 			results <- &Protein{Table: duplicate, Chain: chain, Result: energy}
 			<-working
 			return
-		} else if (chain[k] == 'h') && ((energy <= min) || (float64(energy) > avg && rand.Float64() > p1) || (min <= energy && float64(energy) <= avg && rand.Float64() > p2)) {
+		} else if (chain[k] == 'h') && ((energy <= min) || (float64(energy) > avg && rand.Float64() > *p1) || (min <= energy && float64(energy) <= avg && rand.Float64() > *p2)) {
 			duplicate[x][y] = chain[k]
 			go Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
 			continue
