@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"runtime"
 	"time"
 )
 
 var (
 	proteinChain = flag.String("protein", "", "character stream over the alphabet of {h, p}")
-	p1           = 0.4
-	p2           = 0.2
+	p1           = 0.6
+	p2           = 0.4
+	working      = make(chan bool, 1000)
 )
 
 func main() {
@@ -22,7 +24,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("An error occured: %v", err)
 	}
-
 	rand.Seed(time.Now().UnixNano())
 	posX := rand.Intn(len(protein.Table))
 	posY := rand.Intn(len(protein.Table))
@@ -37,43 +38,50 @@ func main() {
 		}
 	}
 	protein.Table[posX][posY] = []byte(*proteinChain)[1]
-	results := make(chan int)
+	results := make(chan *Protein)
 
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*30)
-
+	ctx, stop := context.WithTimeout(context.Background(), time.Second*30)
+	var pp *Protein
 	r := 0
 	go Search(ctx, results, protein.Table, protein.Chain, posX, posY, 2, 0, 0)
-
-loop:
-	for runtime.NumGoroutine() > 1 {
-		select {
-		case res, ok := <-results:
-			if ok {
-				if res < r {
-					r = res
+	go func() {
+	loop:
+		for {
+			select {
+			case res, ok := <-results:
+				if ok {
+					if res.Result < r {
+						r = res.Result
+						pp = res
+					}
+				}
+			case <-ctx.Done():
+				break loop
+			default:
+				if runtime.NumGoroutine() == 2 {
+					stop()
 				}
 			}
-		case <-ctx.Done():
-			fmt.Println("Timed out. Stopping calculation...")
-			break loop
-		default:
-			continue
 		}
-	}
+	}()
+	<-ctx.Done()
+	fmt.Println("Stopping calculations...")
 	fmt.Printf("Chain: %s\nEnergy: %v\n", *proteinChain, r)
+	os.Exit(0)
 }
 
-func Search(ctx context.Context, results chan int, matrix [][]byte, chain string, posX, posY, k, e, min int) {
+func Search(ctx context.Context, results chan *Protein, matrix [][]byte, chain string, posX, posY, k, e, min int) {
+	working <- true
 	availableMoves := GetAvailableMoves(matrix, posX, posY)
-
 	// duplicating a table
-	duplicate := Duplicate(matrix)
 	select {
 	case <-ctx.Done():
+		<-working
 		return
 	default:
 	}
 	for _, move := range availableMoves {
+		duplicate := Duplicate(matrix)
 		x, y, err := Move(move, posX, posY, len(duplicate))
 		if err != nil {
 			continue
@@ -85,36 +93,20 @@ func Search(ctx context.Context, results chan int, matrix [][]byte, chain string
 		}
 		if k >= len(chain)-1 {
 			duplicate[x][y] = chain[k]
-			results <- energy
+			results <- &Protein{Table: duplicate, Chain: chain, Result: energy}
+			<-working
 			return
-		} else if chain[k] == 'h' {
-			if energy <= min {
-				duplicate[x][y] = chain[k]
-				go Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
-				continue
-			}
-			if float64(energy) > avg {
-				r := rand.Float64()
-				if r > p1 {
-					duplicate[x][y] = chain[k]
-					go Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
-					continue
-				}
-			}
-			if min <= energy && float64(energy) <= avg {
-				r := rand.Float64()
-				if r > p2 {
-					duplicate[x][y] = chain[k]
-					go Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
-					continue
-				}
-			}
+		} else if (chain[k] == 'h') && ((energy <= min) || (float64(energy) > avg && rand.Float64() > p1) || (min <= energy && float64(energy) <= avg && rand.Float64() > p2)) {
+			duplicate[x][y] = chain[k]
+			go Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
+			continue
 		} else {
 			duplicate[x][y] = chain[k]
 			go Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
 			continue
 		}
 	}
+	<-working
 }
 
 func Duplicate(matrix [][]byte) [][]byte {
