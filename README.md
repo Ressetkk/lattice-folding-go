@@ -1,4 +1,4 @@
-# Proteing folding in Go
+# Protein folding in Go
 Requirements:
 * Go version 1.13+
 * A lot of RAM
