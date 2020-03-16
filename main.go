@@ -29,10 +29,12 @@ func main() {
 	protein.Table[posX][posY] = []byte(*proteinChain)[0]
 
 	for {
-		nPosX, nPosY, err := Move(rand.Intn(4), posX, posY, len(protein.Table))
+		m := rand.Intn(4)
+		nPosX, nPosY, err := Move(m, posX, posY, len(protein.Table))
 		if err == nil {
 			posX = nPosX
 			posY = nPosY
+			protein.Move = m
 			break
 		}
 	}
@@ -42,7 +44,7 @@ func main() {
 	ctx, stop := context.WithTimeout(context.Background(), time.Second*30)
 	var pp *Protein
 	r := 0
-	go Search(ctx, results, protein.Table, protein.Chain, posX, posY, 2, 0, 0)
+	go Search(ctx, results, protein, posX, posY, 2, 0, 0)
 	go func() {
 	loop:
 		for {
@@ -66,10 +68,20 @@ func main() {
 	<-ctx.Done()
 	fmt.Println("Stopping calculations...")
 	fmt.Printf("Chain: %s\nEnergy: %v\n", *proteinChain, r)
+
+	var c string
+	for pp != nil {
+		c = fmt.Sprintf("%s %v", pp, c)
+		pp = pp.parent
+	}
+	fmt.Println(c)
 	os.Exit(0)
 }
 
-func Search(ctx context.Context, results chan *Protein, matrix [][]byte, chain string, posX, posY, k, e, min int) {
+func Search(ctx context.Context, results chan *Protein, protein *Protein, posX, posY, k, e, min int) {
+	matrix := protein.Table
+	chain := protein.Chain
+
 	availableMoves := GetAvailableMoves(matrix, posX, posY)
 	// duplicating a table
 	select {
@@ -90,15 +102,15 @@ func Search(ctx context.Context, results chan *Protein, matrix [][]byte, chain s
 		}
 		if k >= len(chain)-1 {
 			duplicate[x][y] = chain[k]
-			results <- &Protein{Table: duplicate, Chain: chain, Result: energy}
+			results <- &Protein{Table: duplicate, Chain: chain, Result: energy, h: chain[k] == 'h', parent: protein, Move: -1}
 			return
 		} else if (chain[k] == 'h') && ((energy <= min) || (float64(energy) > avg && rand.Float64() > *p1) || (min <= energy && float64(energy) <= avg && rand.Float64() > *p2)) {
 			duplicate[x][y] = chain[k]
-			Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
+			Search(ctx, results, NewChild(move, protein, energy, duplicate, chain[k] == 'h'), x, y, k+1, energy, min)
 			continue
 		} else {
 			duplicate[x][y] = chain[k]
-			Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
+			Search(ctx, results, NewChild(move, protein, energy, duplicate, chain[k] == 'h'), x, y, k+1, energy, min)
 			continue
 		}
 	}
