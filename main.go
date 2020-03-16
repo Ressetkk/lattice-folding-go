@@ -15,7 +15,6 @@ var (
 	proteinChain = flag.String("protein", "", "character stream over the alphabet of {h, p}")
 	p1           = flag.Float64("-p1", 0.4, "first probability [Dafault 0.4]")
 	p2           = flag.Float64("-p2", 0.2, "second probability [Dafault 0.2]")
-	working      = make(chan bool, 1000)
 )
 
 func main() {
@@ -71,12 +70,10 @@ func main() {
 }
 
 func Search(ctx context.Context, results chan *Protein, matrix [][]byte, chain string, posX, posY, k, e, min int) {
-	working <- true
 	availableMoves := GetAvailableMoves(matrix, posX, posY)
 	// duplicating a table
 	select {
 	case <-ctx.Done():
-		<-working
 		return
 	default:
 	}
@@ -94,19 +91,17 @@ func Search(ctx context.Context, results chan *Protein, matrix [][]byte, chain s
 		if k >= len(chain)-1 {
 			duplicate[x][y] = chain[k]
 			results <- &Protein{Table: duplicate, Chain: chain, Result: energy}
-			<-working
 			return
 		} else if (chain[k] == 'h') && ((energy <= min) || (float64(energy) > avg && rand.Float64() > *p1) || (min <= energy && float64(energy) <= avg && rand.Float64() > *p2)) {
 			duplicate[x][y] = chain[k]
-			go Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
+			Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
 			continue
 		} else {
 			duplicate[x][y] = chain[k]
-			go Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
+			Search(ctx, results, duplicate, chain, x, y, k+1, energy, min)
 			continue
 		}
 	}
-	<-working
 }
 
 func Duplicate(matrix [][]byte) [][]byte {
