@@ -4,163 +4,99 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"math/rand"
 	"os"
-	"runtime"
+	"regexp"
+	"strings"
 	"time"
 )
 
+const origin, ex, ey = (1 << 31) + (1 << 15), 1, 1 << 16
+
 var (
-	proteinChain = flag.String("protein", "", "character stream over the alphabet of {h, p}")
-	p1           = flag.Float64("-p1", 0.4, "first probability [Dafault 0.4]")
-	p2           = flag.Float64("-p2", 0.2, "second probability [Dafault 0.2]")
+	chain = flag.String("protein", "", "character stream over the alphabet of {h, p}")
+	p1    = flag.Float64("-p1", 0.6, "first probability [Dafault 0.4]")
+	p2    = flag.Float64("-p2", 0.4, "second probability [Dafault 0.2]")
 )
 
 func main() {
 	flag.Parse()
-	protein, err := New(*proteinChain)
-	if err != nil {
-		log.Fatalf("An error occured: %v", err)
+	*chain = strings.ToLower(*chain)
+	if check, _ := regexp.MatchString("[ph]*", *chain); !check {
+		fmt.Println("Chain does not match - must be Pp/Hh")
+		os.Exit(1)
 	}
-	rand.Seed(time.Now().UnixNano())
-	posX := rand.Intn(len(protein.Table))
-	posY := rand.Intn(len(protein.Table))
-	protein.Table[posX][posY] = []byte(*proteinChain)[0]
 
-	for {
-		m := rand.Intn(4)
-		nPosX, nPosY, err := Move(m, posX, posY, len(protein.Table))
-		if err == nil {
-			posX = nPosX
-			posY = nPosY
-			protein.Move = m
-			break
-		}
+	if len(*chain) == 0 {
+		fmt.Println("Chain is empty. Provide valid chain.")
+		os.Exit(1)
 	}
-	protein.Table[posX][posY] = []byte(*proteinChain)[1]
-	results := make(chan *Protein)
+	ctx, _ := context.WithTimeout(context.Background(), time.Second*30)
+	folding := Fold(ctx, *chain)
+	fmt.Println(folding)
+}
 
-	ctx, stop := context.WithTimeout(context.Background(), time.Second*30)
-	var pp *Protein
-	r := 0
-	go Search(ctx, results, protein, posX, posY, 2, 0, 0)
-	go func() {
-	loop:
-		for {
-			select {
-			case res, ok := <-results:
-				if ok {
-					if res.Result < r {
-						r = res.Result
-						pp = res
-					}
+func Fold(ctx context.Context, chain string) *[]*Node {
+	check := func(chain byte) bool {
+		return chain == 'h'
+	}
+
+	switch len(chain) {
+	case 1:
+		return &[]*Node{NewNode(origin, check(chain[0]))}
+	case 2:
+		return &[]*Node{NewNode(origin, check(chain[0])), NewNode(origin+ex, check(chain[1]))}
+	}
+	min, k, minIndex := 0, 2, 0
+	var avg float64
+	branches := &[]*Folding{NewFolding(origin+ex, NewRootFolding(check(chain[0])), check(chain[1]))}
+	for k < len(chain) {
+		ifH := check(chain[k])
+		temp := new([]*Folding)
+		var c, localMin, localSum int
+		for _, b := range *branches {
+			r := rand.Float64()
+			foldIfFree := func(pos int) *Folding {
+				if b.isEmpty(pos) {
+					return NewFolding(pos, b, ifH)
 				}
-			case <-ctx.Done():
-				break loop
-			default:
-				if runtime.NumGoroutine() == 2 {
-					stop()
+				return nil
+			}
+
+			L, R, U, D := b.pos-ex, b.pos+ex, b.pos+ey, b.pos-ey
+			next := &[]*Folding{foldIfFree(L), foldIfFree(R), foldIfFree(U), foldIfFree(D)} // TODO make it parallel
+			for _, nb := range *next {
+				if nb != nil && (nb.e <= min || r >= *p1 || (float64(nb.e) <= avg && r >= *p2)) { // TODO maybe wrong logic here
+					if localMin > nb.e {
+						localMin = nb.e
+						minIndex = c
+					}
+					localSum += nb.e
+					*temp = append(*temp, nb)
+					c++
 				}
 			}
 		}
-	}()
-	<-ctx.Done()
-	fmt.Println("Stopping calculations...")
-	fmt.Printf("Chain: %s\nEnergy: %v\n", *proteinChain, r)
-
-	var c string
-	for pp != nil {
-		c = fmt.Sprintf("%s %v", pp, c)
-		pp = pp.parent
-	}
-	fmt.Println(c)
-	os.Exit(0)
-}
-
-func Search(ctx context.Context, results chan *Protein, protein *Protein, posX, posY, k, e, min int) {
-	matrix := protein.Table
-	chain := protein.Chain
-
-	availableMoves := GetAvailableMoves(matrix, posX, posY)
-	// duplicating a table
-	select {
-	case <-ctx.Done():
-		return
-	default:
-	}
-	for _, move := range availableMoves {
-		duplicate := Duplicate(matrix)
-		x, y, err := Move(move, posX, posY, len(duplicate))
-		if err != nil {
-			continue
+		if c == 0 {
+			fmt.Println("All paths exhausted...")
+			return &[]*Node{}
 		}
-		energy := CalculateEnergy(matrix, posX, posY, move, e)
-		avg := (float64(e + energy)) / float64(k)
-		if energy < min {
-			min = energy
-		}
-		if k >= len(chain)-1 {
-			duplicate[x][y] = chain[k]
-			results <- &Protein{Table: duplicate, Chain: chain, Result: energy, h: chain[k] == 'h', parent: protein, Move: -1}
-			return
-		} else if (chain[k] == 'h') && ((energy <= min) || (float64(energy) > avg && rand.Float64() > *p1) || (min <= energy && float64(energy) <= avg && rand.Float64() > *p2)) {
-			duplicate[x][y] = chain[k]
-			Search(ctx, results, NewChild(move, protein, energy, duplicate, chain[k] == 'h'), x, y, k+1, energy, min)
-			continue
-		} else {
-			duplicate[x][y] = chain[k]
-			Search(ctx, results, NewChild(move, protein, energy, duplicate, chain[k] == 'h'), x, y, k+1, energy, min)
-			continue
-		}
+		min = localMin
+		avg = float64(localSum) / float64(c)
+		branches = temp
+		k++
 	}
-}
-
-func Duplicate(matrix [][]byte) [][]byte {
-	duplicate := make([][]byte, len(matrix))
-	for i := range matrix {
-		duplicate[i] = make([]byte, len(matrix[i]))
-		copy(duplicate[i], matrix[i])
+	if k < len(chain) {
+		return &[]*Node{}
 	}
-	return duplicate
-}
-
-func CalculateEnergy(proteinTable [][]byte, posX, posY, from, prevEnergy int) (e int) {
-	var moves []int
-	switch from {
-	case 0: //from left
-		moves = []int{0, 2, 3}
-		break
-	case 1: //from right
-		moves = []int{1, 2, 3}
-		break
-	case 2: //from up
-		moves = []int{0, 1, 2}
-		break
-	case 3: //from down
-		moves = []int{0, 1, 3}
-		break
+	ret := make([]*Node, len(chain))
+	temp := (*branches)[minIndex]
+	i := k - 1
+	for i >= 0 {
+		ret[i] = NewNode(temp.pos, temp.h)
+		temp = temp.parent
+		i--
 	}
-
-	for _, move := range moves {
-		if x, y, err := Move(move, posX, posY, len(proteinTable)); err != nil {
-			continue
-		} else if proteinTable[x][y] == 'h' && proteinTable[posX][posY] == 'h' {
-			e--
-		}
-	}
-	e += prevEnergy
-	return
-}
-
-func GetAvailableMoves(proteinTable [][]byte, posX, posY int) (moves []int) {
-	for i := 0; i < 4; i++ {
-		if x, y, err := Move(i, posX, posY, len(proteinTable)); err != nil {
-			continue
-		} else if proteinTable[x][y] != 0 {
-			continue
-		}
-		moves = append(moves, i)
-	}
-	return
+	println(min)
+	return &ret
 }

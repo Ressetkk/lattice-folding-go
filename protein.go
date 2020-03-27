@@ -1,69 +1,46 @@
 package main
 
-import (
-	"errors"
-	"fmt"
-	"regexp"
-	"strings"
-)
-
-type Protein struct {
-	Table  [][]byte
-	Chain  string
-	Result int
-	Move   int
+type Folding struct {
+	parent *Folding
+	pos, e int
 	h      bool
-	parent *Protein
 }
 
-var ChainNotMatchError = errors.New("chain does not match - must be Pp/Hh")
-
-func New(chain string) (*Protein, error) {
-	if check, _ := regexp.MatchString("[ph]*", strings.ToLower(chain)); !check {
-		return nil, ChainNotMatchError
-	}
-	size := len(chain)
-	if size%2 == 0 {
-		size++
-	}
-	arr := make([][]byte, size)
-	for i := range arr {
-		arr[i] = make([]byte, size)
-	}
-	return &Protein{
-		Table:  arr,
-		Chain:  strings.ToLower(chain),
-		Result: 0,
-		h:      chain[0] == 'h',
-	}, nil
+func NewRootFolding(h bool) *Folding {
+	return &Folding{parent: nil, pos: origin, h: h}
 }
 
-func NewChild(move int, parent *Protein, result int, table [][]byte, h bool) *Protein {
-	return &Protein{Table: table, Chain: parent.Chain, Result: result, Move: move, parent: parent, h: h}
+func NewFolding(pos int, parent *Folding, h bool) *Folding {
+	if !h {
+		return &Folding{parent: parent, pos: pos, h: h}
+	}
+	e := parent.e
+	sum := 1
+	var temp *Folding
+	if parent != nil {
+		temp = parent.parent
+	}
+	L, R, U, D := pos-ex, pos+ex, pos+ey, pos-ey
+
+	for temp != nil && sum < 4 {
+		if temp.pos == L || temp.pos == R || temp.pos == U || temp.pos == D {
+			if temp.h {
+				e--
+			}
+			sum++
+		}
+		temp = temp.parent
+	}
+	return &Folding{parent: parent, pos: pos, h: h, e: e}
 }
 
-func (protein *Protein) String() string {
-	var sp, h string
-	switch protein.Move {
-	case 0:
-		sp = "LEFT"
-		break
-	case 1:
-		sp = "RIGHT"
-		break
-	case 2:
-		sp = "UP"
-		break
-	case 3:
-		sp = "DOWN"
-		break
-	case -1:
-		sp = ""
+func (f *Folding) isEmpty(pos int) bool {
+	t := f
+	for t != nil {
+		if pos == t.pos {
+			return false
+		}
+		t = t.parent
 	}
-	if protein.h {
-		h = "h"
-	} else {
-		h = "p"
-	}
-	return fmt.Sprintf("%s %v", h, sp)
+	return true
 }
