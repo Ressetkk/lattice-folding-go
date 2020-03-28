@@ -1,29 +1,27 @@
 package main
 
 type Folding struct {
-	parent *Folding
-	pos, e int
-	h      bool
+	parent  *Folding
+	x, y, e int
+	h       bool
 }
 
 func NewRootFolding(h bool) *Folding {
-	return &Folding{parent: nil, pos: origin, h: h}
+	return &Folding{parent: nil, x: x0, y: y0, h: h}
 }
 
-func NewFolding(pos int, parent *Folding, h bool) *Folding {
-	if !h {
-		return &Folding{parent: parent, pos: pos, h: h}
-	}
+func NewFolding(x, y int, parent *Folding, h bool) *Folding {
 	e := parent.e
+	if !h {
+		return &Folding{parent: parent, x: x, y: y, h: h, e: e}
+	}
 	sum := 1
 	var temp *Folding
-	if parent != nil {
-		temp = parent.parent
-	}
-	L, R, U, D := pos-ex, pos+ex, pos+ey, pos-ey
+	temp = parent
+	L, R, U, D := x-ex, x+ex, y+ey, y-ey
 
 	for temp != nil && sum < 4 {
-		if temp.pos == L || temp.pos == R || temp.pos == U || temp.pos == D {
+		if (temp.x == L && temp.y == y) || (temp.x == R && temp.y == y) || (temp.y == U && temp.x == x) || (temp.y == D && temp.x == x) {
 			if temp.h {
 				e--
 			}
@@ -31,13 +29,13 @@ func NewFolding(pos int, parent *Folding, h bool) *Folding {
 		}
 		temp = temp.parent
 	}
-	return &Folding{parent: parent, pos: pos, h: h, e: e}
+	return &Folding{parent: parent, x: x, y: y, h: h, e: e}
 }
 
-func (f *Folding) isEmpty(pos int) bool {
+func (f *Folding) isEmpty(x, y int) bool {
 	t := f
 	for t != nil {
-		if pos == t.pos {
+		if x == t.x && t.y == y {
 			return false
 		}
 		t = t.parent

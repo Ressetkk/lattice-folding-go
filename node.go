@@ -1,10 +1,12 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Node struct {
-	x int
-	h bool
+	x, y int
+	h    bool
 }
 
 func (n Node) String() string {
@@ -14,9 +16,9 @@ func (n Node) String() string {
 	} else {
 		sh = "p"
 	}
-	return fmt.Sprintf("(%v, %v) %v", (n.x&0xFFFF)-0x8000, ((n.x>>16)&0xFFFF)-0x8000, sh)
+	return fmt.Sprintf("(%v, %v) %v", n.x, n.y, sh)
 }
 
-func NewNode(x int, h bool) *Node {
-	return &Node{x, h}
+func NewNode(x, y int, h bool) *Node {
+	return &Node{x, y, h}
 }
