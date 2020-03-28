@@ -15,6 +15,6 @@ go build
 ./lattice-folding-go -protein [hp/HP*]
 ```
 
-The application will work for 30 seconds and after the time it will return the lowest energy.
+The application will work for 30 seconds and after the time it will return the lowest folded protein chain and save the chain as an image.
 
 THe algorithm used is covered in https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5172541/
