@@ -47,6 +47,7 @@ func GenerateImage(nodes *[]*Node, min int, out string) error {
 		y := (float64(height)/2.0 + float64(node.y)*proteinRadius*4) + offsetY
 
 		if i > 0 {
+			canvas.SetLineWidth(lineWidth)
 			canvas.SetRGB(0, 0, 0)
 			canvas.DrawLine(x, y, px, py)
 			canvas.Stroke()
@@ -59,8 +60,12 @@ func GenerateImage(nodes *[]*Node, min int, out string) error {
 		} else {
 			canvas.SetRGB(1, 1, 1)
 		}
+		canvas.SetFillRule(gg.FillRuleEvenOdd)
 		canvas.DrawCircle(x, y, proteinRadius)
-		canvas.Fill()
+		canvas.FillPreserve()
+		canvas.SetRGB(0, 0, 0)
+		canvas.SetLineWidth(2)
+		canvas.Stroke()
 	}
 
 	fb, err := downloadFont("https://github.com/google/fonts/raw/master/apache/roboto/Roboto-Regular.ttf")
