@@ -17,7 +17,7 @@ func NewFolding(x, y int, parent *Folding, h bool) *Folding {
 	}
 	sum := 1
 	var temp *Folding
-	temp = parent
+	temp = parent.parent
 	L, R, U, D := x-ex, x+ex, y+ey, y-ey
 
 	for temp != nil && sum < 4 {
